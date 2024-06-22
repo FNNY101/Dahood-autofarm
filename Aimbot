@@ -1,0 +1,165 @@
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+
+local FOVCircleRadius = 100  -- Default radius, adjustable between 30 and 200
+local TargetPlayer = nil
+local LockOn = false
+local LockOnEnabled = false
+
+-- Create FOV Circle (GUI element)
+local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+local FOVCircle = Instance.new("Frame", ScreenGui)
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+FOVCircle.Size = UDim2.new(0, FOVCircleRadius * 2, 0, FOVCircleRadius * 2)
+FOVCircle.BackgroundTransparency = 0.5
+FOVCircle.BackgroundColor3 = Color3.new(1, 0, 0)
+FOVCircle.BorderSizePixel = 0
+
+-- Create Slider (GUI element)
+local SliderFrame = Instance.new("Frame", ScreenGui)
+SliderFrame.Size = UDim2.new(0, 200, 0, 50)
+SliderFrame.Position = UDim2.new(0.5, -100, 0.9, 0)
+SliderFrame.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+SliderFrame.BorderSizePixel = 0
+
+local SliderBar = Instance.new("Frame", SliderFrame)
+SliderBar.Size = UDim2.new(0, 180, 0, 10)
+SliderBar.Position = UDim2.new(0.5, -90, 0.5, -5)
+SliderBar.BackgroundColor3 = Color3.new(1, 1, 1)
+SliderBar.BorderSizePixel = 0
+
+local SliderButton = Instance.new("ImageButton", SliderFrame)
+SliderButton.Size = UDim2.new(0, 20, 0, 20)
+SliderButton.Position = UDim2.new(0.5, -10, 0.5, -10)
+SliderButton.BackgroundColor3 = Color3.new(1, 0, 0)
+SliderButton.BorderSizePixel = 0
+
+-- Function to find the closest player within the FOV circle
+local function GetClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = FOVCircleRadius
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local character = player.Character
+            local screenPoint = Camera:WorldToScreenPoint(character.HumanoidRootPart.Position)
+            local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).magnitude
+
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPlayer = player
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+-- Update FOV Circle radius
+local function UpdateFOVCircleRadius(radius)
+    FOVCircleRadius = math.clamp(radius, 30, 200)
+    FOVCircle.Size = UDim2.new(0, FOVCircleRadius * 2, 0, FOVCircleRadius * 2)
+end
+
+-- Lock on and off mechanism
+UIS.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and LockOnEnabled then
+        LockOn = true
+        TargetPlayer = GetClosestPlayer()
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        LockOn = false
+        TargetPlayer = nil
+    end
+end)
+
+-- Update loop
+RunService.RenderStepped:Connect(function()
+    if LockOn and TargetPlayer and TargetPlayer.Character and TargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local targetPosition = TargetPlayer.Character.HumanoidRootPart.Position
+        local screenPoint = Camera:WorldToScreenPoint(targetPosition)
+        -- mousemoveabs is not a valid Roblox API, we simulate it by setting camera CFrame instead
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPosition)
+    end
+end)
+
+-- Slider functionality
+local dragging = false
+
+SliderButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+    end
+end)
+
+SliderButton.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local relativePosition = math.clamp((input.Position.X - SliderFrame.AbsolutePosition.X) / SliderFrame.AbsoluteSize.X, 0, 1)
+        local newPosition = UDim2.new(relativePosition, -10, 0.5, -10)
+        SliderButton.Position = newPosition
+        local newRadius = 30 + relativePosition * (200 - 30)
+        UpdateFOVCircleRadius(newRadius)
+    end
+end)
+
+-- Example GUI functions simulating the tab structure
+local tab = {}
+
+function tab:Toggle(name, default, callback)
+    LockOnEnabled = default
+    -- Toggle GUI element simulation
+    local ToggleFrame = Instance.new("Frame", ScreenGui)
+    ToggleFrame.Size = UDim2.new(0, 100, 0, 50)
+    ToggleFrame.Position = UDim2.new(0.5, -50, 0.8, 0)
+    ToggleFrame.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    ToggleFrame.BorderSizePixel = 0
+
+    local ToggleButton = Instance.new("TextButton", ToggleFrame)
+    ToggleButton.Size = UDim2.new(1, 0, 1, 0)
+    ToggleButton.Text = name
+    ToggleButton.BackgroundColor3 = default and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+
+    ToggleButton.MouseButton1Click:Connect(function()
+        LockOnEnabled = not LockOnEnabled
+        ToggleButton.BackgroundColor3 = LockOnEnabled and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+        callback(LockOnEnabled)
+    end)
+end
+
+function tab:Slider(name, min, max, default, callback)
+    UpdateFOVCircleRadius(default)
+    -- Slider GUI element simulation
+    local SliderLabel = Instance.new("TextLabel", SliderFrame)
+    SliderLabel.Size = UDim2.new(0, 200, 0, 50)
+    SliderLabel.Position = UDim2.new(0.5, -100, 0.85, 0)
+    SliderLabel.Text = name
+    SliderLabel.BackgroundTransparency = 1
+
+    local sliderValue = default
+    local relativePosition = (sliderValue - min) / (max - min)
+    SliderButton.Position = UDim2.new(relativePosition, -10, 0.5, -10)
+
+    callback(sliderValue)
+end
+
+-- Using the functions
+tab:Toggle("lockon", false, function(t)
+    LockOnEnabled = t
+end)
+
+tab:Slider("Slider", 30, 200, 100, function(t)
+    UpdateFOVCircleRadius(t)
+end)
